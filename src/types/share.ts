@@ -3,6 +3,7 @@ export interface ShareRequest {
   serverId: string;
   action: "add" | "remove";
   libraryIds: string[];
+  itemRatingKeys?: string[]; // Optional: specific items to share via labels
 }
 
 export interface ShareResponse {

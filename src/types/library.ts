@@ -27,6 +27,7 @@ export interface PlexMediaItem {
   addedAt?: number;
   updatedAt?: number;
   ratingKey: string;
+  labels?: string[]; // Array of label tags
 }
 
 export interface PaginationInfo {

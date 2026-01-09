@@ -16,6 +16,7 @@ export function useFriends() {
       }
       return response.json();
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 60 * 1000, // 30 minutes - data stays fresh
+    gcTime: 60 * 60 * 1000, // 1 hour - keep in cache even when unmounted
   });
 }

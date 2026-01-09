@@ -2,20 +2,69 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { PlexMediaItem } from "@/types/library";
-import { Film, Tv } from "lucide-react";
+import { Film, Tv, X } from "lucide-react";
 import Image from "next/image";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 interface MediaCardProps {
   item: PlexMediaItem;
   selected?: boolean;
   onSelect?: (selected: boolean) => void;
+  labelFilter?: string; // If set, show remove button for this label
+  sectionId?: string; // Needed for remove API call
+  showLabels?: boolean; // Show all labels on the card
 }
 
-export function MediaCard({ item, selected, onSelect }: MediaCardProps) {
+export function MediaCard({ item, selected, onSelect, labelFilter, sectionId, showLabels }: MediaCardProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const thumbUrl = item.thumb
     ? `/api/plex/image?path=${encodeURIComponent(item.thumb)}`
     : null;
+
+  const removeLabelMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/plex/remove-label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemRatingKeys: [item.ratingKey],
+          label: labelFilter,
+          sectionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to remove label");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mediaItems"] });
+      toast({
+        title: "Label removed",
+        description: `Removed from shared items`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleRemoveLabel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    removeLabelMutation.mutate();
+  };
 
   return (
     <Card
@@ -51,6 +100,19 @@ export function MediaCard({ item, selected, onSelect }: MediaCardProps) {
               <Checkbox checked={selected} onCheckedChange={onSelect} />
             </div>
           )}
+          {labelFilter && sectionId && (
+            <div className="absolute top-2 right-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-8 w-8 p-0"
+                onClick={handleRemoveLabel}
+                disabled={removeLabelMutation.isPending}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
         <div className="p-3">
           <h3 className="font-semibold line-clamp-2 text-sm" title={item.title}>
@@ -58,6 +120,15 @@ export function MediaCard({ item, selected, onSelect }: MediaCardProps) {
           </h3>
           {item.year && (
             <p className="text-xs text-muted-foreground mt-1">{item.year}</p>
+          )}
+          {showLabels && item.labels && item.labels.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {item.labels.map((label, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {label}
+                </Badge>
+              ))}
+            </div>
           )}
         </div>
       </CardContent>

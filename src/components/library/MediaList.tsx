@@ -1,53 +1,34 @@
 "use client";
 
 import { useMediaItems } from "@/hooks/use-media-items";
-import { useLabels } from "@/hooks/use-labels";
-import { MediaCard } from "./MediaCard";
-import { LoadingGrid } from "../layout/Loading";
+import { LoadingList } from "../layout/Loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Search, Grid3x3, List, X, Film, Tv } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight, Search, Film, Tv, X } from "lucide-react";
+import { useState } from "react";
 import Image from "next/image";
 import type { PlexMediaItem } from "@/types/library";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
-interface MediaGridProps {
+interface MediaListProps {
   sectionId?: string;
   selectedItems?: Set<string>;
   onSelectItem?: (itemId: string, selected: boolean) => void;
-  labelFilter?: string; // Filter items by this label
+  labelFilter?: string;
   onClearFilter?: () => void;
+  showLabels?: boolean;
 }
 
-export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter, onClearFilter }: MediaGridProps) {
+export function MediaList({ sectionId, selectedItems, onSelectItem, labelFilter, onClearFilter, showLabels }: MediaListProps) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-
-  // Fetch labels for this section
-  const { data: labelsData } = useLabels({ sectionId, enabled: !!sectionId });
-
-  // Find the label ID if we're filtering by a label
-  const filterLabelId = useMemo(() => {
-    if (!labelFilter || !labelsData) {
-      console.log('[Debug MediaGrid] No label filter or labels data:', { labelFilter, labelsData });
-      return undefined;
-    }
-    console.log('[Debug MediaGrid] Looking for label:', labelFilter);
-    console.log('[Debug MediaGrid] Available labels:', labelsData.map(l => ({ id: l.key, tag: l.tag })));
-    const label = labelsData.find(l => l.tag === labelFilter);
-    console.log('[Debug MediaGrid] Found label ID:', label?.key);
-    return label?.key;
-  }, [labelFilter, labelsData]);
-
   const { data, isLoading, error } = useMediaItems({
     sectionId,
     page,
     search,
-    labelId: filterLabelId,
     enabled: !!sectionId,
   });
 
@@ -60,7 +41,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
   }
 
   if (isLoading) {
-    return <LoadingGrid />;
+    return <LoadingList />;
   }
 
   if (error) {
@@ -72,8 +53,13 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
     );
   }
 
-  const items = data?.items || [];
+  let items = data?.items || [];
   const pagination = data?.pagination;
+
+  // Filter items by label if labelFilter is provided
+  if (labelFilter) {
+    items = items.filter(item => item.labels?.includes(labelFilter));
+  }
 
   return (
     <div className="space-y-4">
@@ -89,26 +75,6 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
             }}
             className="pl-10"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 border rounded-md p-1">
-            <Button
-              variant={viewMode === "grid" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("grid")}
-              className="h-8 px-3"
-            >
-              <Grid3x3 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className="h-8 px-3"
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
         {selectedItems && selectedItems.size > 0 && (
           <div className="text-sm text-muted-foreground whitespace-nowrap">
@@ -141,10 +107,10 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
         </div>
       ) : (
         <>
-          {viewMode === "grid" ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="border rounded-lg overflow-hidden">
+            <div className="divide-y">
               {items.map((item) => (
-                <MediaCard
+                <MediaListItem
                   key={item.id}
                   item={item}
                   selected={selectedItems?.has(item.ratingKey)}
@@ -155,29 +121,11 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
                   }
                   labelFilter={labelFilter}
                   sectionId={sectionId}
+                  showLabels={showLabels}
                 />
               ))}
             </div>
-          ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <div className="divide-y">
-                {items.map((item) => (
-                  <MediaListItemInline
-                    key={item.id}
-                    item={item}
-                    selected={selectedItems?.has(item.ratingKey)}
-                    onSelect={
-                      onSelectItem
-                        ? (selected) => onSelectItem(item.ratingKey, selected)
-                        : undefined
-                    }
-                    labelFilter={labelFilter}
-                    sectionId={sectionId}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          </div>
 
           {pagination && pagination.totalPages > 1 && (
             <div className="flex items-center justify-center gap-2">
@@ -210,15 +158,16 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
   );
 }
 
-interface MediaListItemInlineProps {
+interface MediaListItemProps {
   item: PlexMediaItem;
   selected?: boolean;
   onSelect?: (selected: boolean) => void;
   labelFilter?: string;
   sectionId?: string;
+  showLabels?: boolean;
 }
 
-function MediaListItemInline({ item, selected, onSelect, labelFilter, sectionId }: MediaListItemInlineProps) {
+function MediaListItem({ item, selected, onSelect, labelFilter, sectionId, showLabels }: MediaListItemProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -311,6 +260,15 @@ function MediaListItemInline({ item, selected, onSelect, labelFilter, sectionId 
             <span>{Math.floor(item.duration / 60000)}min</span>
           )}
         </div>
+        {showLabels && item.labels && item.labels.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {item.labels.map((label, index) => (
+              <Badge key={index} variant="secondary" className="text-xs">
+                {label}
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       {labelFilter && sectionId && (

@@ -4,17 +4,25 @@ import { useFriends } from "@/hooks/use-friends";
 import { FriendCard } from "./FriendCard";
 import { LoadingList } from "../layout/Loading";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface FriendsListProps {
-  selectedFriends?: Set<string>;
-  onSelectFriend?: (friendId: string, selected: boolean) => void;
+  selectedFriend?: string | null;
+  onSelectFriend?: (friendId: string) => void;
+  onBrowseFriend?: (friendId: string) => void;
+  browsingFriendId?: string | null;
 }
 
-export function FriendsList({ selectedFriends, onSelectFriend }: FriendsListProps) {
-  const { data, isLoading, error } = useFriends();
+export function FriendsList({
+  selectedFriend,
+  onSelectFriend,
+  onBrowseFriend,
+  browsingFriendId
+}: FriendsListProps) {
+  const { data, isLoading, error, refetch, isRefetching } = useFriends();
   const [search, setSearch] = useState("");
 
   if (isLoading) {
@@ -39,14 +47,25 @@ export function FriendsList({ selectedFriends, onSelectFriend }: FriendsListProp
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search friends..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search friends..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => refetch()}
+          disabled={isRefetching}
+          title="Refresh friends list"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+        </Button>
       </div>
 
       {filteredFriends.length === 0 ? (
@@ -54,22 +73,30 @@ export function FriendsList({ selectedFriends, onSelectFriend }: FriendsListProp
           <p>{search ? "No friends found" : "No friends yet"}</p>
         </div>
       ) : (
-        <ScrollArea className="h-[600px] pr-4">
-          <div className="space-y-2">
-            {filteredFriends.map((friend) => (
-              <FriendCard
-                key={friend.id}
-                friend={friend}
-                selected={selectedFriends?.has(friend.id)}
-                onSelect={
-                  onSelectFriend
-                    ? (selected) => onSelectFriend(friend.id, selected)
-                    : undefined
-                }
-              />
-            ))}
-          </div>
-        </ScrollArea>
+        <>
+          <ScrollArea className="h-[600px] pr-4">
+            <div className="space-y-2">
+              {filteredFriends.map((friend) => (
+                <FriendCard
+                  key={friend.id}
+                  friend={friend}
+                  selected={selectedFriend === friend.id}
+                  active={browsingFriendId === friend.id}
+                  onSelect={
+                    onSelectFriend
+                      ? () => onSelectFriend(friend.id)
+                      : undefined
+                  }
+                  onViewDetails={
+                    onBrowseFriend
+                      ? () => onBrowseFriend(friend.id)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        </>
       )}
     </div>
   );

@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "100");
     const search = searchParams.get("search") || "";
+    const labelId = searchParams.get("labelId") || "";
 
     if (!sectionId) {
       return NextResponse.json(
@@ -31,6 +32,11 @@ export async function GET(request: NextRequest) {
     const url = new URL(`${serverUrl}/library/sections/${sectionId}/all`);
     url.searchParams.append("X-Plex-Container-Start", offset.toString());
     url.searchParams.append("X-Plex-Container-Size", limit.toString());
+
+    // Add label filter if provided
+    if (labelId) {
+      url.searchParams.append("label", labelId);
+    }
 
     // Fetch library items
     const response = await fetch(url.toString(), {
@@ -60,6 +66,7 @@ export async function GET(request: NextRequest) {
       duration: item.duration || undefined,
       addedAt: item.addedAt || undefined,
       updatedAt: item.updatedAt || undefined,
+      labels: item.Label?.map((l: any) => l.tag) || [],
     }));
 
     // Filter by search term if provided

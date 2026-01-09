@@ -17,6 +17,7 @@ interface ShareDialogProps {
   onOpenChange: (open: boolean) => void;
   friendIds: string[];
   libraryIds: string[];
+  itemRatingKeys?: string[];
   action: "add" | "remove";
   onSuccess?: () => void;
 }
@@ -26,6 +27,7 @@ export function ShareDialog({
   onOpenChange,
   friendIds,
   libraryIds,
+  itemRatingKeys,
   action,
   onSuccess,
 }: ShareDialogProps) {
@@ -39,6 +41,7 @@ export function ShareDialog({
         friendIds,
         serverId,
         libraryIds,
+        itemRatingKeys,
         action,
       },
       {
@@ -51,18 +54,36 @@ export function ShareDialog({
   };
 
   const actionText = action === "add" ? "share" : "unshare";
+  const hasItems = itemRatingKeys && itemRatingKeys.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {action === "add" ? "Share Libraries" : "Unshare Libraries"}
+            {action === "add"
+              ? hasItems ? "Share Items" : "Share Libraries"
+              : hasItems ? "Unshare Items" : "Unshare Libraries"
+            }
           </DialogTitle>
           <DialogDescription>
-            Are you sure you want to {actionText} {libraryIds.length}{" "}
-            {libraryIds.length === 1 ? "library" : "libraries"} with {friendIds.length}{" "}
-            {friendIds.length === 1 ? "friend" : "friends"}?
+            {hasItems ? (
+              <>
+                Are you sure you want to {actionText} {itemRatingKeys.length}{" "}
+                {itemRatingKeys.length === 1 ? "item" : "items"} with {friendIds.length}{" "}
+                {friendIds.length === 1 ? "friend" : "friends"}?
+                <br />
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  Items will be labeled and the library will be shared.
+                </span>
+              </>
+            ) : (
+              <>
+                Are you sure you want to {actionText} {libraryIds.length}{" "}
+                {libraryIds.length === 1 ? "library" : "libraries"} with {friendIds.length}{" "}
+                {friendIds.length === 1 ? "friend" : "friends"}?
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

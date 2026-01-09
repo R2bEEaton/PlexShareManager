@@ -4,6 +4,7 @@ export interface PlexFriend {
   username: string;
   friendlyName: string;
   thumb?: string;
+  lastSeenAt?: number;
   sharedServers?: PlexSharedServer[];
 }
 
