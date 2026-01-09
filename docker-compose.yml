@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  plex-share-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: plex-share-manager
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      # Next.js Configuration
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - plex-network
+
+networks:
+  plex-network:
+    driver: bridge

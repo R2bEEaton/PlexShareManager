@@ -68,6 +68,55 @@ To find your Plex authentication token:
 
 Alternatively, visit: https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
 
+## Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+1. Ensure you have Docker and Docker Compose installed
+2. Create a `.env.local` file with your Plex credentials (see Installation section)
+3. Run the application:
+
+```bash
+docker-compose up -d
+```
+
+The application will be available at [http://localhost:3000](http://localhost:3000)
+
+To stop the application:
+```bash
+docker-compose down
+```
+
+To view logs:
+```bash
+docker-compose logs -f plex-share-manager
+```
+
+### Using Docker Only
+
+Build the image:
+```bash
+docker build -t plex-share-manager .
+```
+
+Run the container:
+```bash
+docker run -d \
+  --name plex-share-manager \
+  -p 3000:3000 \
+  -e PLEX_SERVER_URL=http://localhost:32400 \
+  -e PLEX_AUTH_TOKEN=your-token-here \
+  -e PLEX_SERVER_ID=your-server-id-here \
+  plex-share-manager
+```
+
+### Docker Network Configuration
+
+If your Plex server is running in Docker, you may need to:
+- Use the Docker network to connect containers
+- Use the container name instead of `localhost` in `PLEX_SERVER_URL`
+- Example: `PLEX_SERVER_URL=http://plex:32400`
+
 ## Development
 
 Run the development server:
