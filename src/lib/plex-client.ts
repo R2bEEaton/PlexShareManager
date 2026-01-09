@@ -11,7 +11,7 @@ export function createPlexClient() {
   }
 
   return new PlexAPI({
-    accessToken,
+    token: accessToken,
     serverURL,
     clientIdentifier: "plex-share-manager",
     product: "Plex Share Manager",
