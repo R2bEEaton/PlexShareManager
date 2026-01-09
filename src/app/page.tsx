@@ -111,8 +111,8 @@ export default function Home() {
         console.log('[Fetch Shared Items] Fetched items:', itemsData);
 
         if (itemsData.success) {
-          const sharedItemKeys = new Set(
-            itemsData.items.map((item: any) => item.ratingKey)
+          const sharedItemKeys = new Set<string>(
+            itemsData.items.map((item: any) => String(item.ratingKey))
           );
           console.log('[Fetch Shared Items] Setting selected items:', sharedItemKeys.size, 'items');
           setSelectedItems(sharedItemKeys);
