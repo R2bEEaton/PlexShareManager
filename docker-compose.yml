@@ -13,6 +13,8 @@ services:
     environment:
       # Next.js Configuration
       - NODE_ENV=production
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
     networks:
       - plex-network
