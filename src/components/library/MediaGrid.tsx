@@ -1,6 +1,6 @@
 "use client";
 
-import { useMediaItems, type SortOption, type SortDirection } from "@/hooks/use-media-items";
+import { useMediaItems } from "@/hooks/use-media-items";
 import { useLabels } from "@/hooks/use-labels";
 import { MediaCard } from "./MediaCard";
 import { LoadingGrid } from "../layout/Loading";
@@ -14,12 +14,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Search, Grid3x3, List, X, Film, Tv, ArrowUpDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Grid3x3, List, X, Film, Tv, ArrowUpDown, RefreshCw } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import type { PlexMediaItem } from "@/types/library";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+
+type SortOption = "title" | "addedAt";
+type SortDirection = "asc" | "desc";
+
+const ITEMS_PER_PAGE = 100;
 
 interface MediaGridProps {
   sectionId?: string;
@@ -30,6 +35,7 @@ interface MediaGridProps {
 }
 
 export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter, onClearFilter }: MediaGridProps) {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -51,29 +57,66 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
     return label?.key;
   }, [labelFilter, labelsData]);
 
-  const { data, isLoading, error } = useMediaItems({
+  // Fetch ALL items once (no search/sort params - we'll handle client-side)
+  const { data, isLoading, error, isFetching } = useMediaItems({
     sectionId,
-    page,
-    search,
+    limit: 10000, // Fetch all items
     labelId: filterLabelId,
-    sortBy,
-    sortDir,
     enabled: !!sectionId,
   });
 
   // Reset page when library changes
   useEffect(() => {
     setPage(1);
+    setSearch("");
   }, [sectionId]);
 
-  const items = data?.items || [];
-  const pagination = data?.pagination;
+  const allItems = data?.items || [];
+
+  // Client-side filtering and sorting
+  const processedItems = useMemo(() => {
+    let items = [...allItems];
+
+    // Filter by search
+    if (search) {
+      const searchLower = search.toLowerCase();
+      items = items.filter((item) =>
+        item.title.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort
+    items.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === "title") {
+        comparison = (a.title || "").localeCompare(b.title || "");
+      } else if (sortBy === "addedAt") {
+        const aTime = a.addedAt || 0;
+        const bTime = b.addedAt || 0;
+        comparison = aTime - bTime;
+      }
+      return sortDir === "desc" ? -comparison : comparison;
+    });
+
+    return items;
+  }, [allItems, search, sortBy, sortDir]);
+
+  // Client-side pagination
+  const totalPages = Math.ceil(processedItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = processedItems.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE
+  );
 
   const handleSortChange = (value: string) => {
     const [newSortBy, newSortDir] = value.split("-") as [SortOption, SortDirection];
     setSortBy(newSortBy);
     setSortDir(newSortDir);
     setPage(1);
+  };
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["mediaItems", sectionId] });
   };
 
   const currentSortValue = `${sortBy}-${sortDir}`;
@@ -114,6 +157,16 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
               <SelectItem value="title-desc">Title (Z-A)</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isFetching}
+            className="h-10 px-3"
+            title="Refresh from Plex"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+          </Button>
           <div className="flex items-center gap-1 border rounded-md p-1">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
@@ -144,7 +197,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
         <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-lg">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">
-              Showing items shared with this friend ({items.length} items)
+              Showing items shared with this friend ({processedItems.length} items)
             </span>
           </div>
           <Button
@@ -165,7 +218,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
           <p>Failed to load media items</p>
           <p className="text-sm text-muted-foreground">{error.message}</p>
         </div>
-      ) : items.length === 0 ? (
+      ) : processedItems.length === 0 ? (
         <div className="text-center p-8 text-muted-foreground">
           <p>{search ? "No items found" : "No items in this library"}</p>
         </div>
@@ -173,7 +226,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
         <>
           {viewMode === "grid" ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {items.map((item) => (
+              {paginatedItems.map((item) => (
                 <MediaCard
                   key={item.id}
                   item={item}
@@ -191,7 +244,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
           ) : (
             <div className="border rounded-lg overflow-hidden">
               <div className="divide-y">
-                {items.map((item) => (
+                {paginatedItems.map((item) => (
                   <MediaListItemInline
                     key={item.id}
                     item={item}
@@ -209,25 +262,25 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
             </div>
           )}
 
-          {pagination && pagination.totalPages > 1 && (
+          {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage(page - 1)}
-                disabled={!pagination.hasPrev}
+                disabled={page <= 1}
               >
                 <ChevronLeft className="h-4 w-4" />
                 Previous
               </Button>
               <span className="text-sm text-muted-foreground">
-                Page {pagination.page} of {pagination.totalPages}
+                Page {page} of {totalPages}
               </span>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage(page + 1)}
-                disabled={!pagination.hasNext}
+                disabled={page >= totalPages}
               >
                 Next
                 <ChevronRight className="h-4 w-4" />
