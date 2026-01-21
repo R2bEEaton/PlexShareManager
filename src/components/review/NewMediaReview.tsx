@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNewMedia } from "@/hooks/use-new-media";
 import { useReviewActions } from "@/hooks/use-review-actions";
 import { useFriends } from "@/hooks/use-friends";
 import { useShareManager } from "@/hooks/use-share-manager";
+import { useMediaSync } from "@/hooks/use-media-sync";
 import { ReviewableMediaCard } from "./ReviewableMediaCard";
 import { ReviewToolbar } from "./ReviewToolbar";
 import { ReviewStats } from "./ReviewStats";
@@ -15,11 +16,21 @@ import { AlertCircle, Inbox, CheckCircle, SkipForward } from "lucide-react";
 export function NewMediaReview() {
   const [libraryFilter, setLibraryFilter] = useState<string | undefined>();
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const hasAutoSynced = useRef(false);
 
   const { data, isLoading, error } = useNewMedia({ libraryId: libraryFilter });
   const { data: friendsData } = useFriends();
   const { markAsReviewed, isReviewing } = useReviewActions();
   const { shareContent, isSharing } = useShareManager();
+  const { sync, isSyncing } = useMediaSync();
+
+  // Auto-sync on page load (only once)
+  useEffect(() => {
+    if (!hasAutoSynced.current) {
+      hasAutoSynced.current = true;
+      sync();
+    }
+  }, [sync]);
 
   const friends = friendsData?.friends || [];
   const items = data?.data?.items || [];

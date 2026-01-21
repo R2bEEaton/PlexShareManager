@@ -20,13 +20,13 @@ export default function Home() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [browsingFriendId, setBrowsingFriendId] = useState<string | null>(null);
 
-  // Fetch libraries to auto-select the first one
+  // Fetch libraries to auto-select "all"
   const { data: librariesData } = useLibraries();
 
-  // Auto-select first library on load
+  // Auto-select "all" on load
   useEffect(() => {
     if (!selectedLibrary && librariesData?.libraries && librariesData.libraries.length > 0) {
-      setSelectedLibrary(librariesData.libraries[0].key);
+      setSelectedLibrary("all");
     }
   }, [librariesData, selectedLibrary]);
 

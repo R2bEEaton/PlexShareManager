@@ -7,20 +7,34 @@ interface MediaItemsResponse {
   pagination: PaginationInfo;
 }
 
+export type SortOption = "title" | "addedAt";
+export type SortDirection = "asc" | "desc";
+
 interface UseMediaItemsOptions {
   sectionId?: string;
   page?: number;
   limit?: number;
   search?: string;
   labelId?: string;
+  sortBy?: SortOption;
+  sortDir?: SortDirection;
   enabled?: boolean;
 }
 
 export function useMediaItems(options: UseMediaItemsOptions) {
-  const { sectionId, page = 1, limit = 100, search = "", labelId, enabled = true } = options;
+  const {
+    sectionId,
+    page = 1,
+    limit = 100,
+    search = "",
+    labelId,
+    sortBy = "addedAt",
+    sortDir = "desc",
+    enabled = true
+  } = options;
 
   return useQuery({
-    queryKey: ["mediaItems", sectionId, page, limit, search, labelId],
+    queryKey: ["mediaItems", sectionId, page, limit, search, labelId, sortBy, sortDir],
     queryFn: async (): Promise<MediaItemsResponse> => {
       if (!sectionId) {
         throw new Error("Section ID is required");
@@ -30,6 +44,8 @@ export function useMediaItems(options: UseMediaItemsOptions) {
         sectionId,
         page: page.toString(),
         limit: limit.toString(),
+        sortBy,
+        sortDir,
       });
 
       if (search) {
@@ -37,13 +53,9 @@ export function useMediaItems(options: UseMediaItemsOptions) {
       }
 
       if (labelId) {
-        console.log('[Debug useMediaItems] Adding labelId to params:', labelId);
         params.append("labelId", labelId);
-      } else {
-        console.log('[Debug useMediaItems] No labelId provided');
       }
 
-      console.log('[Debug useMediaItems] Final URL:', `/api/plex/library-items?${params}`);
       const response = await fetch(`/api/plex/library-items?${params}`);
       if (!response.ok) {
         throw new Error("Failed to fetch media items");

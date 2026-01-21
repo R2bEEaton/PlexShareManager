@@ -9,13 +9,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Library } from "lucide-react";
 
 interface LibrarySelectorProps {
   value?: string;
   onChange: (value: string) => void;
+  showAllOption?: boolean;
 }
 
-export function LibrarySelector({ value, onChange }: LibrarySelectorProps) {
+export function LibrarySelector({ value, onChange, showAllOption = true }: LibrarySelectorProps) {
   const { data, isLoading, error } = useLibraries();
 
   if (isLoading) {
@@ -40,6 +42,17 @@ export function LibrarySelector({ value, onChange }: LibrarySelectorProps) {
         <SelectValue placeholder="Select library" />
       </SelectTrigger>
       <SelectContent>
+        {showAllOption && libraries.length > 0 && (
+          <>
+            <SelectItem value="all">
+              <span className="flex items-center gap-2">
+                <Library className="h-4 w-4" />
+                All Libraries
+              </span>
+            </SelectItem>
+            <div className="my-1 border-t" />
+          </>
+        )}
         {movieLibraries.length > 0 && (
           <>
             <div className="px-2 py-1.5 text-sm font-semibold">Movies</div>

@@ -28,6 +28,7 @@ export interface PlexMediaItem {
   updatedAt?: number;
   ratingKey: string;
   labels?: string[]; // Array of label tags
+  sectionId?: string; // Library section ID (used when viewing all libraries)
 }
 
 export interface PaginationInfo {

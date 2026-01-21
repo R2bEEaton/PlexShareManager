@@ -1,14 +1,21 @@
 "use client";
 
-import { useMediaItems } from "@/hooks/use-media-items";
+import { useMediaItems, type SortOption, type SortDirection } from "@/hooks/use-media-items";
 import { useLabels } from "@/hooks/use-labels";
 import { MediaCard } from "./MediaCard";
 import { LoadingGrid } from "../layout/Loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Search, Grid3x3, List, X, Film, Tv } from "lucide-react";
-import { useState, useMemo } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ChevronLeft, ChevronRight, Search, Grid3x3, List, X, Film, Tv, ArrowUpDown } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import type { PlexMediaItem } from "@/types/library";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -26,20 +33,21 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [sortBy, setSortBy] = useState<SortOption>("addedAt");
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
 
-  // Fetch labels for this section
-  const { data: labelsData } = useLabels({ sectionId, enabled: !!sectionId });
+  // Fetch labels for this section (only for single library, not "all")
+  const { data: labelsData } = useLabels({
+    sectionId: sectionId !== "all" ? sectionId : undefined,
+    enabled: !!sectionId && sectionId !== "all",
+  });
 
   // Find the label ID if we're filtering by a label
   const filterLabelId = useMemo(() => {
     if (!labelFilter || !labelsData) {
-      console.log('[Debug MediaGrid] No label filter or labels data:', { labelFilter, labelsData });
       return undefined;
     }
-    console.log('[Debug MediaGrid] Looking for label:', labelFilter);
-    console.log('[Debug MediaGrid] Available labels:', labelsData.map(l => ({ id: l.key, tag: l.tag })));
     const label = labelsData.find(l => l.tag === labelFilter);
-    console.log('[Debug MediaGrid] Found label ID:', label?.key);
     return label?.key;
   }, [labelFilter, labelsData]);
 
@@ -48,8 +56,27 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
     page,
     search,
     labelId: filterLabelId,
+    sortBy,
+    sortDir,
     enabled: !!sectionId,
   });
+
+  // Reset page when library changes
+  useEffect(() => {
+    setPage(1);
+  }, [sectionId]);
+
+  const items = data?.items || [];
+  const pagination = data?.pagination;
+
+  const handleSortChange = (value: string) => {
+    const [newSortBy, newSortDir] = value.split("-") as [SortOption, SortDirection];
+    setSortBy(newSortBy);
+    setSortDir(newSortDir);
+    setPage(1);
+  };
+
+  const currentSortValue = `${sortBy}-${sortDir}`;
 
   if (!sectionId) {
     return (
@@ -59,26 +86,10 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
     );
   }
 
-  if (isLoading) {
-    return <LoadingGrid />;
-  }
-
-  if (error) {
-    return (
-      <div className="text-center p-8 text-destructive">
-        <p>Failed to load media items</p>
-        <p className="text-sm text-muted-foreground">{error.message}</p>
-      </div>
-    );
-  }
-
-  const items = data?.items || [];
-  const pagination = data?.pagination;
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search media..."
@@ -91,6 +102,18 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
           />
         </div>
         <div className="flex items-center gap-2">
+          <Select value={currentSortValue} onValueChange={handleSortChange}>
+            <SelectTrigger className="w-[180px]">
+              <ArrowUpDown className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="addedAt-desc">Recently Added</SelectItem>
+              <SelectItem value="addedAt-asc">Oldest First</SelectItem>
+              <SelectItem value="title-asc">Title (A-Z)</SelectItem>
+              <SelectItem value="title-desc">Title (Z-A)</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-1 border rounded-md p-1">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
@@ -135,7 +158,14 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
         </div>
       )}
 
-      {items.length === 0 ? (
+      {isLoading ? (
+        <LoadingGrid />
+      ) : error ? (
+        <div className="text-center p-8 text-destructive">
+          <p>Failed to load media items</p>
+          <p className="text-sm text-muted-foreground">{error.message}</p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="text-center p-8 text-muted-foreground">
           <p>{search ? "No items found" : "No items in this library"}</p>
         </div>
@@ -154,7 +184,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
                       : undefined
                   }
                   labelFilter={labelFilter}
-                  sectionId={sectionId}
+                  sectionId={item.sectionId || sectionId}
                 />
               ))}
             </div>
@@ -172,7 +202,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
                         : undefined
                     }
                     labelFilter={labelFilter}
-                    sectionId={sectionId}
+                    sectionId={item.sectionId || sectionId}
                   />
                 ))}
               </div>
