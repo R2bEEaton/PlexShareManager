@@ -16,7 +16,8 @@
       "WebFetch(domain:plexapi.dev)",
       "WebFetch(domain:github.com)",
       "Bash(npx tsc:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm ls:*)"
     ]
   }
 }

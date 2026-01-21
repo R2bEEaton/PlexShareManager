@@ -17,9 +17,10 @@ interface MediaCardProps {
   labelFilter?: string; // If set, show remove button for this label
   sectionId?: string; // Needed for remove API call
   showLabels?: boolean; // Show all labels on the card
+  isNew?: boolean; // Show NEW badge for unreviewed items
 }
 
-export function MediaCard({ item, selected, onSelect, labelFilter, sectionId, showLabels }: MediaCardProps) {
+export function MediaCard({ item, selected, onSelect, labelFilter, sectionId, showLabels, isNew }: MediaCardProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -98,6 +99,13 @@ export function MediaCard({ item, selected, onSelect, labelFilter, sectionId, sh
               onClick={(e) => e.stopPropagation()}
             >
               <Checkbox checked={selected} onCheckedChange={onSelect} />
+            </div>
+          )}
+          {isNew && !labelFilter && (
+            <div className="absolute top-2 right-2">
+              <Badge className="bg-green-500 hover:bg-green-500 text-white text-xs font-bold">
+                NEW
+              </Badge>
             </div>
           )}
           {labelFilter && sectionId && (

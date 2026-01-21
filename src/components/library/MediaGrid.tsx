@@ -2,11 +2,17 @@
 
 import { useMediaItems } from "@/hooks/use-media-items";
 import { useLabels } from "@/hooks/use-labels";
+import { useReviewStatusMap } from "@/hooks/use-review-status-map";
+import { useFriends } from "@/hooks/use-friends";
+import { useReviewActions } from "@/hooks/use-review-actions";
+import { useShareManager } from "@/hooks/use-share-manager";
+import { useMediaSync } from "@/hooks/use-media-sync";
 import { MediaCard } from "./MediaCard";
 import { LoadingGrid } from "../layout/Loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -14,7 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Search, Grid3x3, List, X, Film, Tv, ArrowUpDown, RefreshCw } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
+import { ChevronLeft, ChevronRight, Search, Grid3x3, List, X, Film, Tv, ArrowUpDown, RefreshCw, SkipForward, Share2, Users } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import type { PlexMediaItem } from "@/types/library";
@@ -36,11 +50,30 @@ interface MediaGridProps {
 
 export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter, onClearFilter }: MediaGridProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortBy, setSortBy] = useState<SortOption>("addedAt");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
+  const [selectedFriendsForShare, setSelectedFriendsForShare] = useState<Set<string>>(new Set());
+
+  // Fetch review status to show NEW badges
+  const { data: reviewStatusData } = useReviewStatusMap();
+  const reviewStatusMap = reviewStatusData?.statusMap || {};
+
+  // Fetch friends for sharing
+  const { data: friendsData } = useFriends();
+  const friends = friendsData?.friends || [];
+
+  // Review actions (skip)
+  const { markAsReviewed, isReviewing } = useReviewActions();
+
+  // Share manager
+  const { shareContent, isSharing } = useShareManager();
+
+  // Media sync
+  const { sync, isSyncing } = useMediaSync();
 
   // Fetch labels for this section (only for single library, not "all")
   const { data: labelsData } = useLabels({
@@ -116,10 +149,70 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
   };
 
   const handleRefresh = () => {
+    // Sync with Plex and refresh the cache
+    sync();
     queryClient.invalidateQueries({ queryKey: ["mediaItems", sectionId] });
+    queryClient.invalidateQueries({ queryKey: ["reviewStatusMap"] });
+  };
+
+  const handleSkipSelected = () => {
+    if (!selectedItems || selectedItems.size === 0) return;
+    markAsReviewed({
+      ratingKeys: Array.from(selectedItems),
+      action: "skipped",
+    });
+    // Clear selection after skip
+    if (onSelectItem) {
+      selectedItems.forEach((id) => onSelectItem(id, false));
+    }
+  };
+
+  const handleShareWithFriends = () => {
+    if (!selectedItems || selectedItems.size === 0 || selectedFriendsForShare.size === 0) return;
+
+    const serverId = process.env.NEXT_PUBLIC_PLEX_SERVER_ID || "";
+
+    // Share content with selected friends
+    shareContent({
+      friendIds: Array.from(selectedFriendsForShare),
+      serverId,
+      action: "add",
+      libraryIds: [],
+      itemRatingKeys: Array.from(selectedItems),
+    });
+
+    // Mark as reviewed
+    markAsReviewed({
+      ratingKeys: Array.from(selectedItems),
+      action: "shared",
+    });
+
+    // Clear selections
+    setSelectedFriendsForShare(new Set());
+    if (onSelectItem) {
+      selectedItems.forEach((id) => onSelectItem(id, false));
+    }
+
+    toast({
+      title: "Shared",
+      description: `Shared ${selectedItems.size} items with ${selectedFriendsForShare.size} friends`,
+    });
+  };
+
+  const toggleFriendForShare = (friendId: string) => {
+    setSelectedFriendsForShare((prev) => {
+      const next = new Set(prev);
+      if (next.has(friendId)) {
+        next.delete(friendId);
+      } else {
+        next.add(friendId);
+      }
+      return next;
+    });
   };
 
   const currentSortValue = `${sortBy}-${sortDir}`;
+  const isProcessing = isReviewing || isSharing || isSyncing;
 
   if (!sectionId) {
     return (
@@ -186,12 +279,75 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
             </Button>
           </div>
         </div>
-        {selectedItems && selectedItems.size > 0 && (
-          <div className="text-sm text-muted-foreground whitespace-nowrap">
-            {selectedItems.size} selected
-          </div>
-        )}
       </div>
+
+      {/* Action bar when items are selected */}
+      {selectedItems && selectedItems.size > 0 && (
+        <div className="flex items-center justify-between p-3 bg-muted/50 border rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              {selectedItems.size} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSkipSelected}
+              disabled={isProcessing}
+            >
+              <SkipForward className="h-4 w-4 mr-2" />
+              Skip
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={isProcessing}
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share with...
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {friends.length === 0 ? (
+                  <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                    No friends found
+                  </div>
+                ) : (
+                  <>
+                    <div className="px-2 py-1.5 text-sm font-semibold">Select friends</div>
+                    <DropdownMenuSeparator />
+                    {friends.map((friend) => (
+                      <DropdownMenuCheckboxItem
+                        key={friend.id}
+                        checked={selectedFriendsForShare.has(friend.id)}
+                        onCheckedChange={() => toggleFriendForShare(friend.id)}
+                        onSelect={(e: Event) => e.preventDefault()}
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        {friend.username || friend.email || friend.id}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <div className="p-2">
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={selectedFriendsForShare.size === 0 || isProcessing}
+                        onClick={handleShareWithFriends}
+                      >
+                        Share with {selectedFriendsForShare.size} friend{selectedFriendsForShare.size !== 1 ? "s" : ""}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      )}
 
       {labelFilter && onClearFilter && (
         <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-lg">
@@ -238,6 +394,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
                   }
                   labelFilter={labelFilter}
                   sectionId={item.sectionId || sectionId}
+                  isNew={reviewStatusMap[item.ratingKey] === null}
                 />
               ))}
             </div>
@@ -256,6 +413,7 @@ export function MediaGrid({ sectionId, selectedItems, onSelectItem, labelFilter,
                     }
                     labelFilter={labelFilter}
                     sectionId={item.sectionId || sectionId}
+                    isNew={reviewStatusMap[item.ratingKey] === null}
                   />
                 ))}
               </div>
@@ -299,9 +457,10 @@ interface MediaListItemInlineProps {
   onSelect?: (selected: boolean) => void;
   labelFilter?: string;
   sectionId?: string;
+  isNew?: boolean;
 }
 
-function MediaListItemInline({ item, selected, onSelect, labelFilter, sectionId }: MediaListItemInlineProps) {
+function MediaListItemInline({ item, selected, onSelect, labelFilter, sectionId, isNew }: MediaListItemInlineProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -382,7 +541,14 @@ function MediaListItemInline({ item, selected, onSelect, labelFilter, sectionId 
       </div>
 
       <div className="flex-1 min-w-0">
-        <h3 className="font-semibold truncate">{item.title}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold truncate">{item.title}</h3>
+          {isNew && (
+            <Badge className="bg-green-500 hover:bg-green-500 text-white text-xs font-bold flex-shrink-0">
+              NEW
+            </Badge>
+          )}
+        </div>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           {item.year && <span>{item.year}</span>}
           {item.rating && (
